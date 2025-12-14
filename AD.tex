@@ -90,6 +90,45 @@ Lets say we write a code that computes a very simple function:
 
 at its essence, regardless of language or computer architecture, we need to follow the dependency graph in figure \ref{fig:comp-graph}. Where circular nodes are program inputs, and square nodes are intermediate computations. If we take this as our primary (think forward model) code, we can have a secondary code that, at runtime builds, the dependancy graph in the background. This is the AD code.
 
+\begin{figure}
+\centering
+\begin{tikzpicture}[
+  roundnode/.style={circle, draw=black, very thick, minimum size=7mm},
+  squarednode/.style={rectangle, draw=black, very thick, minimum size=7mm},
+]
+
+\node[roundnode] (x1) at (0,0) {$x_1$};
+\node[roundnode] (x2) at (3,0) {$x_2$};
+\node[roundnode] (x3) at (6,0) {$x_3$};
+
+\node[squarednode] (mul) at (3,-2) {$v_2 = x_1 x_2$};
+\node[squarednode] (sin) at (6,-2) {$v_3 = \sin(x_3)$};
+\node[squarednode] (log) at (0,-2) {$v_1 = \log(x_1)$};
+
+\node[squarednode] (sum1) at (3.75,-3.5) {$v_4 = v_2+ v_3$};
+
+\node[squarednode] (v5) at (3.75,-5) {$v_5 = v_4 - v_1$};
+\node[squarednode] (y1) at (3.75,-6.5) {$y_1 = v_5$};
+\node[squarednode] (y2) at (6.75,-5) {$y_2 = v_3$};
+
+\draw[->] (x1) -- (mul);
+\draw[->] (x2) -- (mul);
+\draw[->] (x3) -- (sin);
+
+\draw[->] (mul) -- (sum1);
+\draw[->] (sin) -- (sum1);
+
+\draw[->] (x1) -- (log);
+\draw[->] (sum1) -- (v5);
+\draw[->] (log) -- (v5);
+\draw[->] (sin) -- (y2);
+\draw[->] (v5) -- (y1);
+
+\end{tikzpicture}
+\caption{computational dependency graph.}
+\label{fig:comp-graph}
+\end{figure}
+
 
 \subsection{Forward Mode AD}
 
@@ -138,89 +177,9 @@ where $v$ is node/operation we are currently on and $u$ are all its previous dep
 
 \end{tikzpicture}
 \caption{chain rule applied forward through the dependency graph.}
-\label{fig:comp-graph}
+\label{fig:forward-comp-graph}
 \end{figure}
 
-\newpage
-
-\begin{figure}
-\centering
-\begin{tikzpicture}[
-  roundnode/.style={circle, draw=black, very thick, minimum size=7mm},
-  squarednode/.style={rectangle, draw=black, very thick, minimum size=7mm},
-]
-
-\node[roundnode] (x1) at (0,0) {$x_1$};
-\node[roundnode] (x2) at (3,0) {$x_2$};
-\node[roundnode] (x3) at (6,0) {$x_3$};
-
-\node[squarednode] (mul) at (3,-2) {$v_2 = x_1 x_2$};
-\node[squarednode] (sin) at (6,-2) {$v_3 = \sin(x_3)$};
-\node[squarednode] (log) at (0,-2) {$v_1 = \log(x_1)$};
-
-\node[squarednode] (sum1) at (3.75,-3.5) {$v_4 = v_2+ v_3$};
-
-\node[squarednode] (v5) at (3.75,-5) {$v_5 = v_4 - v_1$};
-\node[squarednode] (y1) at (3.75,-6.5) {$y_1 = v_5$};
-\node[squarednode] (y2) at (6.75,-5) {$y_2 = v_3$};
-
-\draw[->] (x1) -- (mul);
-\draw[->] (x2) -- (mul);
-\draw[->] (x3) -- (sin);
-
-\draw[->] (mul) -- (sum1);
-\draw[->] (sin) -- (sum1);
-
-\draw[->] (x1) -- (log);
-\draw[->] (sum1) -- (v5);
-\draw[->] (log) -- (v5);
-\draw[->] (sin) -- (y2);
-\draw[->] (v5) -- (y1);
-
-\end{tikzpicture}
-\caption{computational dependency graph.}
-\label{fig:comp-graph}
-\end{figure}
-
-
-
-\begin{figure}[H]
-\centering
-\begin{tikzpicture}[
-  roundnode/.style={circle, draw=black, very thick, minimum size=7mm},
-  squarednode/.style={rectangle, draw=black, very thick, minimum size=7mm},
-  ]
-
-
-\node[squarednode] (x2) at (1,-.5) {$\pd{y}{x_2} = \pd{y}{v_2}\pd{v_2}{x_2} = \pd{y}{v_2}x_1$};
-\node[squarednode] (v3) at (6.5,-2) {$\pd{y}{v_3} = \pd{y}{v_4}\pd{v_4}{v_3} + \pd{y}{y_2}\pd{y_2}{v_3} = \pd{y}{v_4} + \pd{y}{y_2}$};
-\node[squarednode] (v1) at (-4,-2) {$\pd{y}{v_1} = \pd{y}{y_1}\pd{v_5}{v_1} = -\pd{y}{y_1}$};
-
-\node[squarednode] (v2) at (1, -2) {$\pd{y}{v_2} = \pd{y}{v_4}\pd{v_4}{v_2} = \pd{y}{v_4}$};
-
-\node[squarednode] (x3) at (6.5,-.5) {$\pd{y}{x_3} = \pd{y}{v_3}\pd{v_3}{x_3} = \pd{y}{v_3}\cos(x_3)$};
-\node[squarednode] (x1) at (-4,-.5) {$\pd{y}{x_1} = \pd{y}{v_5}\pd{v_5}{v_1} = -\pd{y}{v_4}$};
-
-\node[roundnode] (v5) at (3.75, -6) {$\pd{y}{y_1}$};
-
-%\node[roundnode] (y1) at (3.75,-7.5) {$\pd{y}{y_1}$};
-\node[roundnode] (y2) at (7,-4) {$\pd{y}{y_2}$};
-\node[squarednode] (v4) at (3,-4) {$\pd{y}{v_4} = \pd{y}{v_5}\pd{v_5}{v_4} = \pd{y}{v_5}$};
-
-\draw[->] (v5) -- (v4);
-\draw[->] (v5) -- (v1);
-\draw[->] (v4) -- (v2);
-\draw[->] (v4) -- (v3);
-\draw[->] (y2) -- (v3);
-\draw[->] (v1) -- (x1);
-\draw[->] (v2) -- (x2);
-\draw[->] (v3) -- (x3);
-\draw[->] (v2) -- (x1);
-
-\end{tikzpicture}
-\caption{chain rule applied backwards through the dependency graph.}
-\label{fig:comp-graph}
-\end{figure}
 
 
 We can also construct this graph as the forward model program runs, as long as we have a table of derivatives of primative operations like, multiplication, triganometric, and transcendental functions.
@@ -240,6 +199,46 @@ Reverse mode AD is more confusing, but solves the problem about calculating the 
 
 
 in the reverse direction up the graph we to get:
+
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[
+  roundnode/.style={circle, draw=black, very thick, minimum size=7mm},
+  squarednode/.style={rectangle, draw=black, very thick, minimum size=7mm},
+  ]
+
+\node[squarednode] (x2) at (1,-.5) {$\pd{y}{x_2} = \pd{y}{v_2}\pd{v_2}{x_2} = \pd{y}{v_2}x_1$};
+\node[squarednode] (v3) at (6.5,-2) {$\pd{y}{v_3} = \pd{y}{v_4}\pd{v_4}{v_3} + \pd{y}{y_2}\pd{y_2}{v_3} = \pd{y}{v_4} + \pd{y}{y_2}$};
+\node[squarednode] (v1) at (-4,-2) {$\pd{y}{v_1} = \pd{y}{v_5}\pd{v_5}{v_1} = -\pd{y}{v_5}$};
+
+\node[squarednode] (v2) at (1, -2) {$\pd{y}{v_2} = \pd{y}{v_4}\pd{v_4}{v_2} = \pd{y}{v_4}$};
+
+\node[squarednode] (x3) at (6.5,-.5) {$\pd{y}{x_3} = \pd{y}{v_3}\pd{v_3}{x_3} = \pd{y}{v_3}\cos(x_3)$};
+\node[squarednode] (x1) at (-4,-.5) {$\pd{y}{x_1} = \pd{y}{v_1}\pd{v_1}{x_1} = \frac{1}{x_1}\pd{y}{v_1}$};
+
+\node[squarednode] (v5) at (3.75, -6) {$\pd{y}{v_5} = \pd{y}{y_1}\pd{y_1}{v_5} = \pd{y}{y_1}$};
+\node[roundnode] (y1) at (3.75,-8) {$\pd{y}{y_1}$};
+\node[roundnode] (y2) at (7,-4) {$\pd{y}{y_2}$};
+\node[squarednode] (v4) at (3,-4) {$\pd{y}{v_4} = \pd{y}{v_5}\pd{v_5}{v_4} = \pd{y}{v_5}$};
+
+\draw[->] (y1) -- (v5);
+\draw[->] (v5) -- (v4);
+\draw[->] (v5) -- (v1);
+\draw[->] (v4) -- (v2);
+\draw[->] (v4) -- (v3);
+\draw[->] (y2) -- (v3);
+\draw[->] (v1) -- (x1);
+\draw[->] (v2) -- (x2);
+\draw[->] (v3) -- (x3);
+\draw[->] (v2) -- (x1);
+
+\end{tikzpicture}
+\caption{chain rule applied backwards through the dependency graph.}
+\label{fig:backwards-comp-graph}
+\end{figure}
+
+Where all of the chain rules have been written out explicitly. Similar to forward mode if we traverse the graph in a topological ordering we will have access to all derivatives that we need to compute the next node on the next level.
 
 
 \section{Automatic Differentiation of Large Scale Model}
