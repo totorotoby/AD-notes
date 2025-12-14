@@ -90,6 +90,59 @@ Lets say we write a code that computes a very simple function:
 
 at its essence, regardless of language or computer architecture, we need to follow the dependency graph in figure \ref{fig:comp-graph}. Where circular nodes are program inputs, and square nodes are intermediate computations. If we take this as our primary (think forward model) code, we can have a secondary code that, at runtime builds, the dependancy graph in the background. This is the AD code.
 
+
+\subsection{Forward Mode AD}
+
+When we are building this graph, we of course aren't interested in the graph itself because the program is already doing those computations. Instead we can use the depedencies and operations to apply the chain rule as we build the graph. This is forward mode AD. For instance maybe we are interested in $\pd{y}{x}$. It is very important to realize that $x$ is one of the input variables $x_1, x_2$ or $x_3$, we just haven't decided which one yet, so we write it down generically. We then apply the chain rule:
+
+\begin{align*}
+  \pd{v}{x} = \sum_i \pd{v}{u}\pd{u}{x}
+\end{align*}
+
+where $v$ is node/operation we are currently on and $u$ are all its previous dependancies. This gives the graph we get the following:
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[
+  roundnode/.style={circle, draw=black, very thick, minimum size=7mm},
+  squarednode/.style={rectangle, draw=black, very thick, minimum size=7mm},
+  ]
+
+
+\node[roundnode] (x1) at (0,0) {$\pd{x_1}{x}$};
+\node[roundnode] (x2) at (3,0) {$\pd{x_2}{x}$};
+\node[roundnode] (x3) at (6,0) {$\pd{x_3}{x}$};
+
+\node[squarednode] (mul) at (2.5,-2) {$\pd{v_2}{x} = \pd{x_1}{x}x_2 + \pd{x_2}{x}x_1$};
+\node[squarednode] (sin) at (6.5,-2) {$\pd{v_3}{x} = \cos(x_3)\pd{x_3}{x}$};
+\node[squarednode] (log) at (-1,-2) {$\pd{v_1}{x} = \frac{1}{x_1}\pd{x_1}{x}$};
+
+\node[squarednode] (sum1) at (3.75,-3.5) {$\pd{v_4}{x} = \pd{v_2}{x} + \pd{v_3}{x}$};
+
+\node[squarednode] (y1) at (3.75,-6.5) {$\pd{y_1}{x} = \pd{v_5}{x}$};
+\node[squarednode] (y2) at (6.75,-5) {$\pd{y_2}{x} = \pd{v_3}{x}$};
+\node[squarednode] (v5) at (3.75,-5) {$\pd{v_5}{x} = \pd{v_4}{x} - \pd{v_1}{x}$};
+
+\draw[->] (x1) -- (mul);
+\draw[->] (x2) -- (mul);
+\draw[->] (x3) -- (sin);
+
+\draw[->] (mul) -- (sum1);
+\draw[->] (sin) -- (sum1);
+
+\draw[->] (x1) -- (log);
+\draw[->] (sum1) -- (v5);
+\draw[->] (log) -- (v5);
+\draw[->] (sin) -- (y2);
+\draw[->] (v5) -- (y1);
+
+\end{tikzpicture}
+\caption{chain rule applied forward through the dependency graph.}
+\label{fig:comp-graph}
+\end{figure}
+
+\newpage
+
 \begin{figure}
 \centering
 \begin{tikzpicture}[
@@ -107,7 +160,8 @@ at its essence, regardless of language or computer architecture, we need to foll
 
 \node[squarednode] (sum1) at (3.75,-3.5) {$v_4 = v_2+ v_3$};
 
-\node[squarednode] (y1) at (3.75,-5) {$y_1 = v_4 - v_1$};
+\node[squarednode] (v5) at (3.75,-5) {$v_5 = v_4 - v_1$};
+\node[squarednode] (y1) at (3.75,-6.5) {$y_1 = v_5$};
 \node[squarednode] (y2) at (6.75,-5) {$y_2 = v_3$};
 
 \draw[->] (x1) -- (mul);
@@ -118,18 +172,17 @@ at its essence, regardless of language or computer architecture, we need to foll
 \draw[->] (sin) -- (sum1);
 
 \draw[->] (x1) -- (log);
-\draw[->] (sum1) -- (y1);
-\draw[->] (log) -- (y1);
+\draw[->] (sum1) -- (v5);
+\draw[->] (log) -- (v5);
 \draw[->] (sin) -- (y2);
+\draw[->] (v5) -- (y1);
 
 \end{tikzpicture}
 \caption{computational dependency graph.}
 \label{fig:comp-graph}
 \end{figure}
 
-\subsection{Forward Mode AD}
 
-When we are building this graph, we of course aren't interested in the graph itself because the program is already doing those computations. Instead we can use the depedencies and operations to apply the chain rule as we build the graph. This is forward mode AD. For instance maybe we are interested in $\pd{y}{x}$. It is very important to realize that $x$ is one of the input variables $x_1, x_2$ or $x_3$, we just haven't decided which one yet, so we write it down generically. If we apply the chain rule to the graph we get the following:
 
 \begin{figure}[H]
 \centering
@@ -139,33 +192,33 @@ When we are building this graph, we of course aren't interested in the graph its
   ]
 
 
-\node[roundnode] (x1) at (0,0) {$\pd{x_1}{x}$};
-\node[roundnode] (x2) at (3,0) {$\pd{x_2}{x}$};
-\node[roundnode] (x3) at (6,0) {$\pd{x_3}{x}$};
+\node[squarednode] (x2) at (1,-.5) {$\pd{y}{x_2} = \pd{y}{v_2}\pd{v_2}{x_2} = \pd{y}{v_2}x_1$};
+\node[squarednode] (v3) at (6.5,-2) {$\pd{y}{v_3} = \pd{y}{v_4}\pd{v_4}{v_3} + \pd{y}{y_2}\pd{y_2}{v_3} = \pd{y}{v_4} + \pd{y}{y_2}$};
+\node[squarednode] (v1) at (-4,-2) {$\pd{y}{v_1} = \pd{y}{y_1}\pd{v_5}{v_1} = -\pd{y}{y_1}$};
 
-\node[squarednode] (mul) at (2.5,-2) {$\pd{v_2}{x} = \pd{x_1}{x}x_2 + \pd{x_2}{x}x_1$};
-\node[squarednode] (sin) at (6.5,-2) {$\pd{v_3}{x} = \cos(x_3)\pd{x_3}{x}$};
-\node[squarednode] (log) at (-1,-2) {$\pd{v_1}{x} = \frac{1}{x_1}\pd{x_1}{x}$};
+\node[squarednode] (v2) at (1, -2) {$\pd{y}{v_2} = \pd{y}{v_4}\pd{v_4}{v_2} = \pd{y}{v_4}$};
 
-\node[squarednode] (sum1) at (3.75,-3.5) {$\pd{v_4}{x} = \pd{v_2}{x} + \pd{v_3}{x}$};
+\node[squarednode] (x3) at (6.5,-.5) {$\pd{y}{x_3} = \pd{y}{v_3}\pd{v_3}{x_3} = \pd{y}{v_3}\cos(x_3)$};
+\node[squarednode] (x1) at (-4,-.5) {$\pd{y}{x_1} = \pd{y}{v_5}\pd{v_5}{v_1} = -\pd{y}{v_4}$};
 
-\node[squarednode] (y2) at (6.75,-5) {$\pd{y_2}{x} = \pd{v_3}{x}$};
-\node[squarednode] (y) at (3.75,-5) {$\pd{y_1}{x} = \pd{v_4}{x} - \pd{v_1}{x}$};
+\node[roundnode] (v5) at (3.75, -6) {$\pd{y}{y_1}$};
 
-\draw[->] (x1) -- (mul);
-\draw[->] (x2) -- (mul);
-\draw[->] (x3) -- (sin);
+%\node[roundnode] (y1) at (3.75,-7.5) {$\pd{y}{y_1}$};
+\node[roundnode] (y2) at (7,-4) {$\pd{y}{y_2}$};
+\node[squarednode] (v4) at (3,-4) {$\pd{y}{v_4} = \pd{y}{v_5}\pd{v_5}{v_4} = \pd{y}{v_5}$};
 
-\draw[->] (mul) -- (sum1);
-\draw[->] (sin) -- (sum1);
-
-\draw[->] (x1) -- (log);
-\draw[->] (sum1) -- (y);
-\draw[->] (log) -- (y);
-\draw[->] (sin) -- (y2);
+\draw[->] (v5) -- (v4);
+\draw[->] (v5) -- (v1);
+\draw[->] (v4) -- (v2);
+\draw[->] (v4) -- (v3);
+\draw[->] (y2) -- (v3);
+\draw[->] (v1) -- (x1);
+\draw[->] (v2) -- (x2);
+\draw[->] (v3) -- (x3);
+\draw[->] (v2) -- (x1);
 
 \end{tikzpicture}
-\caption{chain rule applied forward through the dependency graph.}
+\caption{chain rule applied backwards through the dependency graph.}
 \label{fig:comp-graph}
 \end{figure}
 
@@ -178,52 +231,18 @@ If we want to then compute a specific derivative (for instance $\pd{y}{x_1}$ we 
 
 \subsection{Reverse Mode AD}
 
-Reverse mode AD is more confusing, but solves the problem about calculating the jacobian quickly if $m \ll n$. The intuation behind reverse mode is to ignore the fact that $x$ are inputs and that $y$ are outputs in the forward model. Now, instead of seeding the inputs, we instead seed the outputs and use the chain rule in the reverse direction up the graph we get something like this:
+Reverse mode AD is more confusing, but solves the problem about calculating the jacobian quickly if $m \ll n$. The intuation behind reverse mode is to completely ignore the fact that $x$ are inputs and that $y$ are outputs in the forward model, while retaining the idea that we want derivatves of $\pd{y}{x}$ and not $\pd{x}{y}$. Now, instead of seeding the inputs, we instead seed the outputs and use the chain rule:
 
-\begin{figure}[H]
-\centering
-\begin{tikzpicture}[
-  roundnode/.style={circle, draw=black, very thick, minimum size=7mm},
-  squarednode/.style={rectangle, draw=black, very thick, minimum size=7mm},
-  ]
+\begin{align*}
+\pd{y}{u} = \sum_{i}\pd{y}{v_i}\pd{v_i}{u}
+\end{align*}
 
 
-\node[roundnode] (x1) at (0,0) {$\pd{x_1}{x}$};
-\node[roundnode] (x2) at (3,0) {$\pd{x_2}{x}$};
-\node[roundnode] (x3) at (6,0) {$\pd{x_3}{x}$};
 
-\node[squarednode] (mul) at (2.5,-2) {$\pd{v_2}{x} = \pd{x_1}{x}x_2 + \pd{x_2}{x}x_1$};
-\node[squarednode] (sin) at (6.5,-2) {$\pd{v_3}{x} = \cos(x_3)\pd{x_3}{x}$};
-\node[squarednode] (log) at (-1,-2) {$\pd{v_1}{x} = \frac{1}{x_1}\pd{x_1}{x}$};
-
-\node[squarednode] (sum1) at (3.75,-3.5) {$\pd{v_4}{x} = \pd{v_2}{x} + \pd{v_3}{x}$};
-
-\node[roundnode] (y2in) at (6.75,-7) {$\pd{y}{y_2}$};
-\node[roundnode] (y1in) at (3.75,-7) {$\pd{y}{y_1}$};
-
-\node[squarednode] (y2) at (6.75,-5) {$\pd{v_6}{x} = \pd{v_3}{x}$};
-\node[squarednode] (y1) at (3.75,-5) {$\pd{v_5}{x} = \pd{v_4}{x} - \pd{v_1}{x}$};
+in the reverse direction up the graph we to get:
 
 
-\draw[<-] (x1) -- (mul);
-\draw[<-] (x2) -- (mul);
-\draw[<-] (x3) -- (sin);
-
-\draw[<-] (mul) -- (sum1);
-\draw[<-] (sin) -- (sum1);
-
-\draw[<-] (x1) -- (log);
-\draw[<-] (sum1) -- (y);
-\draw[<-] (log) -- (y);
-\draw[<-] (sin) -- (y2);
-
-\end{tikzpicture}
-\caption{chain rule applied backwards through the dependency graph.}
-\label{fig:comp-graph}
-\end{figure}
-
-
-\section{Automatic Differentiation of a Forward Model}
+\section{Automatic Differentiation of Large Scale Model}
 
 
 \end{document}
