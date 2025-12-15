@@ -61,7 +61,7 @@
 
 \section{Introduction}
 
-Some parameters in ice sheet models are hard if not impossible to observe. One strategy for estimating these parameters is to systematically adjust them so that outputs of the model best fit data that is observable. A cost function $\mathcal{J}(\alpha, u^{obs}, \hat{u}(\alpha))$, where $\alpha$ is the model parameter, is used to quantify the error between the model outputs $\hat{u}$ and the observable data $u^{obs}$. Most methods of minimizing $\mathcal{J}$ (gradient decent, etc...) require taking the derivative of the cost function with respect to the parameter, $\frac{d\mathcal{J}}{d\alpha}$. By the chain rule this is computed as:
+Some parameters in ice sheet models are very hard to get observations of (basal friction coefficients, rheological coefficients, etc...). One strategy for estimating these parameters is to systematically adjust them so that outputs of the model best fit data that is observable. A cost function $\mathcal{J}(\alpha, u^{obs}, \hat{u}(\alpha))$, where $\alpha$ is the model parameter, is used to quantify the error between the model outputs $\hat{u}$ and the observable data $u^{obs}$. Most methods of minimizing $\mathcal{J}$ (gradient decent, etc...) require taking the derivative of the cost function with respect to the parameter, $\frac{d\mathcal{J}}{d\alpha}$. By the chain rule this is computed as:
 
 \begin{align*}
   \frac{d\mathcal{J}}{d\alpha} = \pd{\mathcal{J}}{\alpha} + \pd{\mathcal{J}}{\hat{u}}\pd{\hat{u}}{\alpha}.
@@ -73,8 +73,7 @@ The first two derivatives are easy to compute analytically, but the 3rd one is m
   \pd{\hat{u}}{\alpha} \approx \frac{\hat{u}^{pert} - \hat{u}}{\alpha^{pert} - \alpha}.
 \end{align*}
 
-This requires running your model at least twice to compute a gradient for a single parameter, and in the case of a spatially variable parameter at least $n$ times where $n$ is the number of spatial degrees of freedom. The adjoint method is a method that requires more mathematical machineary, but requires solving only one additional model/system. The problem here is that it can be very difficult, if not impossible to derive this system. A third technique, automatic differentiation (AD), is summerized here. It is automatic in the sense that nothing coming from the specfic model system has to be derived, although it is more expensive than the adjoint method. First I describe automatic differentiation usinng a toy example, then explain how it is applied to a full forward model code.
-
+This requires running your model at least twice to compute a gradient for a single parameter, and in the case of a spatially variable parameter at least $O(n)$ times where $n$ is the number of spatial degrees of freedom. The adjoint method is a method that requires more mathematical machinery, but requires solving only one additional model/system. The problem here is that it can be very difficult, if not impossible to derive this system. A third technique, automatic differentiation (AD), is summarized here. It is automatic in the sense that nothing coming from the specific model system has to be derived, although it is more expensive than the adjoint method.
 
 \section{Automatic Differentiation of a Simple Code/Function}
 
@@ -88,7 +87,7 @@ Lets say we write a code that computes a very simple function:
     \end{bmatrix}.
 \end{align*}
 
-at its essence, regardless of language or computer architecture, we need to follow the dependency graph in figure \ref{fig:comp-graph}. Where circular nodes are program inputs, and square nodes are intermediate computations. If we take this as our primary (think forward model) code, we can have a secondary code that, at runtime builds, the dependancy graph in the background. This is the AD code.
+At its essence, regardless of language or computer architecture, we need to follow the dependency graph in Figure \ref{fig:comp-graph}. Where circular nodes are program inputs, and square nodes are intermediate computations. If we take this as our primary (think forward model) code, we can have a secondary code that, at runtime builds, the dependency graph in the background. This is the AD code.
 
 \begin{figure}
 \centering
@@ -132,13 +131,13 @@ at its essence, regardless of language or computer architecture, we need to foll
 
 \subsection{Forward Mode AD}
 
-When we are building this graph, we of course aren't interested in the graph itself because the program is already doing those computations. Instead we can use the depedencies and operations to apply the chain rule as we build the graph. This is forward mode AD. For instance maybe we are interested in $\pd{y}{x}$. It is very important to realize that $x$ is one of the input variables $x_1, x_2$ or $x_3$, we just haven't decided which one yet, so we write it down generically. We then apply the chain rule:
+When we are building this graph, we of course aren't interested in the graph itself because the program is already doing those computations. Instead we can use the dependencies and operations to apply the chain rule as we build the graph. This is forward mode AD. We are interested in computing $\pd{y}{x}$, where $x$ is one of the input variables $x_1, x_2$ or $x_3$, we just haven't decided which one yet, so we write it down generically. We then apply the chain rule:
 
 \begin{align*}
-  \pd{v}{x} = \sum_i \pd{v}{u}\pd{u}{x}
+  \pd{v}{x} = \sum_{i \in \text{parents}} \pd{v}{u_i}\pd{u_i}{x}
 \end{align*}
 
-where $v$ is node/operation we are currently on and $u$ are all its previous dependancies. This gives the graph we get the following:
+where $v$ is node/operation we are currently on and $u$ are all its previous dependencies. This gives the following graph:
 
 \begin{figure}[H]
 \centering
@@ -182,18 +181,18 @@ where $v$ is node/operation we are currently on and $u$ are all its previous dep
 
 
 
-We can also construct this graph as the forward model program runs, as long as we have a table of derivatives of primative operations like, multiplication, triganometric, and transcendental functions.
+We can construct this graph as the forward model program runs, as long as we have a table of derivatives of primitive operations like, multiplication, trigonometric, and transcendental functions.
 
-If we want to then compute a specific derivative (for instance $\pd{y}{x_1}$ we just need to seed the values for $\pd{x_i}{x}$. So for $\pd{y}{x_1}$ we seed with, $\pd{x_1}{x_1} = 1, ~~~ \pd{x_2}{x_1} = 0, ~~~ \pd{x_3}{x_1} = 0$. Then
- as long as the graph is in a \href{https://en.wikipedia.org/wiki/Topological_sorting}{topological ordering}, we will have access to all of the previous derivatives we need to use to compute the next derivative on the next level. One observation to make is that we only need to traverse the graph 1 time to get the derivative of all outputs w.r.t to one input, but if we want the deriative of all inputs w.r.t to $y_1$ or $y_2$, we need to traverse the graph 3 times (or $n$ times where $n$ is the number of input variables). In the case of a generic vector valued function $ y = f(x) : \mathbb{R}^n \rightarrow \mathbb{R}^m$ then this method is faster at getting the jacobian if $n \ll m$.
+If we want to then compute a specific derivative (for instance $\pd{y}{x_1}$) we just need to seed the values for $\pd{x_i}{x}$. So for $\pd{y}{x_1}$ we seed with, $\pd{x_1}{x_1} = 1, ~~~ \pd{x_2}{x_1} = 0, ~~~ \pd{x_3}{x_1} = 0$. Then
+ as long as the graph is in a \href{https://en.wikipedia.org/wiki/Topological_sorting}{topological ordering}, we will have access to all of the previous derivatives we need to use to compute the next derivative on the next level. One observation to make is that we only need to traverse the graph 1 time to get the derivative of all outputs w.r.t. to one input, but if we want the derivative of all inputs w.r.t to $y_1$ or $y_2$, we need to traverse the graph 3 times (or $n$ times where $n$ is the number of input variables). In the case of a generic vector valued function $ y = f(x) : \mathbb{R}^n \rightarrow \mathbb{R}^m$ then this method is faster at getting the jacobian if $n \ll m$.
 
 
 \subsection{Reverse Mode AD}
 
-Reverse mode AD is more confusing, but solves the problem about calculating the jacobian quickly if $m \ll n$. The intuation behind reverse mode is to completely ignore the fact that $x$ are inputs and that $y$ are outputs in the forward model, while retaining the idea that we want derivatves of $\pd{y}{x}$ and not $\pd{x}{y}$. Now, instead of seeding the inputs, we instead seed the outputs and use the chain rule:
+Reverse mode AD is more confusing, but solves the problem about calculating the jacobian quickly if $m \ll n$. The intuition behind reverse mode is to completely ignore the fact that $x$ are inputs and that $y$ are outputs in the forward model, while retaining the idea that we want derivatives of $\pd{y}{x}$ and not $\pd{x}{y}$. Now, instead of seeding the inputs, we instead seed the outputs and use the chain rule:
 
 \begin{align*}
-\pd{y}{u} = \sum_{i}\pd{y}{v_i}\pd{v_i}{u}
+\pd{y}{u} = \sum_{i \in \text{parents}}\pd{y}{v_i}\pd{v_i}{u}
 \end{align*}
 
 
@@ -238,10 +237,11 @@ in the reverse direction up the graph we to get:
 \label{fig:backwards-comp-graph}
 \end{figure}
 
-Where all of the chain rules have been written out explicitly. Similar to forward mode if we traverse the graph in a topological ordering we will have access to all derivatives that we need to compute the next node on the next level.
-
+Where all of the chain rules have been written out explicitly. Now if we instead seed with $\pd{y_1}{y_1} = 1, ~~~ \pd{y_1}{y_2} = 0$, we will compute the complete gradient $\nabla y_1$ in one traversal. Similar to forward mode if we traverse the graph in a topological ordering we will have access to all derivatives that we need to compute the next node on the next level. In the reverse mode case we now compute the jacobian in fewer traversals when $m \ll n$. One disadvantage of reverse mode is that the graph must be constructed in advance of the actual reverse pass. In the forward case the construction and differentiation could be done in tandem.
 
 \section{Automatic Differentiation of Large Scale Model}
+
+A forward numerical PDE solver that generates $\hat{u}$ (the notation from the introduction) is a function $\hat{u}(x, \alpha, ...): \mathbb{R}^n \rightarrow \mathbb{R}^m$ and so AD can be applied to it in the same way as the simple function above. In total reverse mode AD can be run to get $\frac{d\mathcal{J}}{d\alpha}$ in one pass since $\mathcal{J}$ is a scalar function. Even though $\mathcal{J}$ is a scalar function, we should remember that the dependency graph gets wide because $\pd{\hat{u}}{\alpha}$ is a $m \times n_\alpha$ matrix. This is unavoidable and both the width and the height of the graph also contribute to the efficiency, but not even close to having to traverse the graph $n_\alpha$ times. In other words the cost of reverse mode scales with solution/state size and not with control variable size.
 
 
 \end{document}
